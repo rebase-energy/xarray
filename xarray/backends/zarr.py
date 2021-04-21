@@ -282,6 +282,7 @@ class ZarrStore(AbstractWritableDataStore):
         chunk_store=None,
         append_dim=None,
         write_region=None,
+        **kwargs
     ):
         import zarr
 
@@ -291,9 +292,9 @@ class ZarrStore(AbstractWritableDataStore):
 
         if consolidated:
             # TODO: an option to pass the metadata_key keyword
-            zarr_group = zarr.open_consolidated(store, **open_kwargs)
+            zarr_group = zarr.open_consolidated(store, **open_kwargs, **kwargs)
         else:
-            zarr_group = zarr.open_group(store, **open_kwargs)
+            zarr_group = zarr.open_group(store, **open_kwargs, **kwargs)
         return cls(zarr_group, consolidate_on_close, append_dim, write_region)
 
     def __init__(
@@ -568,6 +569,7 @@ def open_zarr(
     chunk_store=None,
     decode_timedelta=None,
     use_cftime=None,
+    extra_backend_kwargs={},
     **kwargs,
 ):
     """Load and decode a dataset from a Zarr store.
@@ -670,6 +672,7 @@ def open_zarr(
         "consolidated": consolidated,
         "overwrite_encoded_chunks": overwrite_encoded_chunks,
         "chunk_store": chunk_store,
+        **extra_backend_kwargs
     }
 
     ds = open_dataset(
