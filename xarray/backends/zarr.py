@@ -48,6 +48,10 @@ class ZarrArrayWrapper(BackendArray):
         dtype = array.dtype
         self.dtype = dtype
 
+    @property
+    def chunks(self):
+        return self.get_array().chunks
+
     def get_array(self):
         return self.datastore.ds[self.variable_name]
 

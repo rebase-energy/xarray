@@ -499,6 +499,10 @@ class ImplicitToExplicitIndexingAdapter(utils.NDArrayMixin):
         self.array = as_indexable(array)
         self.indexer_cls = indexer_cls
 
+    @property
+    def chunks(self):
+        return self.array.chunks
+
     def __array__(self, dtype=None):
         return np.asarray(self.array, dtype=dtype)
 
@@ -538,6 +542,10 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
 
         self.array = as_indexable(array)
         self.key = key
+
+    @property
+    def chunks(self):
+        return self.array.chunks
 
     def _updated_key(self, new_key):
         iter_new_key = iter(expanded_indexer(new_key.tuple, self.ndim))
@@ -612,6 +620,10 @@ class LazilyVectorizedIndexedArray(ExplicitlyIndexedNDArrayMixin):
     def shape(self):
         return np.broadcast(*self.key.tuple).shape
 
+    @property
+    def chunks(self):
+        return self.array.chunks
+
     def __array__(self, dtype=None):
         return np.asarray(self.array[self.key], dtype=None)
 
@@ -667,6 +679,10 @@ class CopyOnWriteArray(ExplicitlyIndexedNDArrayMixin):
 
     def transpose(self, order):
         return self.array.transpose(order)
+
+    @property
+    def chunks(self):
+        return self.array.chunks
 
     def __setitem__(self, key, value):
         self._ensure_copied()
