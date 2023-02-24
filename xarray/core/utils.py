@@ -6,6 +6,7 @@ import itertools
 import os.path
 import re
 import warnings
+import numbers
 from enum import Enum
 from typing import (
     AbstractSet,
@@ -258,6 +259,8 @@ def is_duck_array(value: Any) -> bool:
         and hasattr(value, "__array_ufunc__")
     )
 
+def is_integer(x):
+    return isinstance(x, numbers.Integral)
 
 def either_dict_or_kwargs(
     pos_kwargs: Optional[Mapping[Hashable, T]],
@@ -569,6 +572,19 @@ class NDArrayMixin(NdimSizeLenMixin):
     def __repr__(self: Any) -> str:
         return "{}(array={!r})".format(type(self).__name__, self.array)
 
+
+def _array_passthrough_bin_op(f):
+    @functools.wraps(f)
+    def func(self, other):
+        self_arr = self.__array__() if hasattr(self, "__array__") else self
+        other_arr = other.__array__() if hasattr(other, "__array__") else other
+        return f(self_arr, other_arr)
+    return func
+
+def inject_passthrough_binary_ops(cls, inplace=False):
+    from .ops import CMP_BINARY_OPS, NUM_BINARY_OPS, op_str, get_op
+    for name in CMP_BINARY_OPS + NUM_BINARY_OPS:
+        setattr(cls, op_str(name), _array_passthrough_bin_op(get_op(name)))
 
 class ReprObject:
     """Object that prints as the given value, for use with sentinel values."""

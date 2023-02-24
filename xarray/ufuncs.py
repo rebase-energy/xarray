@@ -133,6 +133,7 @@ def _create_op(name):
 
 
 __all__ = (  # noqa: F822
+    "add",
     "angle",
     "arccos",
     "arccosh",
@@ -189,6 +190,9 @@ __all__ = (  # noqa: F822
     "sinh",
     "sqrt",
     "square",
+    "subtract",
+    "power",
+    "copy",
     "tan",
     "tanh",
     "trunc",

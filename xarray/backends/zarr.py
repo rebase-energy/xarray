@@ -52,6 +52,9 @@ class ZarrArrayWrapper(BackendArray):
     def chunks(self):
         return self.get_array().chunks
 
+    def copy(self, *args, **kwargs):
+        return np.asarray(self.get_array()).copy(*args, **kwargs)
+
     def get_array(self):
         return self.datastore.ds[self.variable_name]
 

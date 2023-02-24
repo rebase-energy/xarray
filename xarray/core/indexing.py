@@ -17,7 +17,7 @@ from .pycompat import (
     is_duck_dask_array,
     sparse_array_type,
 )
-from .utils import is_dict_like, maybe_cast_to_coords_dtype
+from .utils import is_dict_like, maybe_cast_to_coords_dtype, inject_passthrough_binary_ops, is_integer
 
 
 def expanded_indexer(key, ndim):
@@ -482,6 +482,18 @@ class ExplicitlyIndexed:
     __slots__ = ()
 
 
+def _materialize_array(array, key):
+    if isinstance(key, OuterIndexer) or isinstance(key, VectorizedIndexer):
+        key_cls = type(key)
+        key_without_int_indices = key_cls(tuple(np.asarray([ind]) if is_integer(ind) else ind for ind in key.tuple))
+        key_int_indices = [ix for ix, ind in enumerate(key.tuple) if is_integer(ind)]
+        arr = np.asarray(array[key_without_int_indices], dtype=None)
+        if len(key_int_indices) > 0:
+            arr = np.squeeze(arr, axis=tuple(key_int_indices))
+        return arr
+    else:
+        return np.asarray(array[key], dtype=None)
+
 class ExplicitlyIndexedNDArrayMixin(utils.NDArrayMixin, ExplicitlyIndexed):
     __slots__ = ()
 
@@ -502,6 +514,9 @@ class ImplicitToExplicitIndexingAdapter(utils.NDArrayMixin):
     @property
     def chunks(self):
         return self.array.chunks
+
+    def copy(self, *args, **kwargs):
+        return np.asarray(self.array).copy(*args, **kwargs)
 
     def __array__(self, dtype=None):
         return np.asarray(self.array, dtype=dtype)
@@ -547,6 +562,9 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
     def chunks(self):
         return self.array.chunks
 
+    def copy(self, *args, **kwargs):
+        return np.asarray(self.array).copy(*args, **kwargs)
+
     def _updated_key(self, new_key):
         iter_new_key = iter(expanded_indexer(new_key.tuple, self.ndim))
         full_key = []
@@ -573,7 +591,7 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
 
     def __array__(self, dtype=None):
         array = as_indexable(self.array)
-        return np.asarray(array[self.key], dtype=None)
+        return _materialize_array(array, self.key)
 
     def transpose(self, order):
         return LazilyVectorizedIndexedArray(self.array, self.key).transpose(order)
@@ -624,8 +642,11 @@ class LazilyVectorizedIndexedArray(ExplicitlyIndexedNDArrayMixin):
     def chunks(self):
         return self.array.chunks
 
+    def copy(self, *args, **kwargs):
+        return np.asarray(self.array).copy(*args, **kwargs)
+
     def __array__(self, dtype=None):
-        return np.asarray(self.array[self.key], dtype=None)
+        return _materialize_array(self.array, self.key)
 
     def _updated_key(self, new_key):
         return _combine_indexers(self.key, self.shape, new_key)
@@ -683,6 +704,9 @@ class CopyOnWriteArray(ExplicitlyIndexedNDArrayMixin):
     @property
     def chunks(self):
         return self.array.chunks
+
+    def copy(self, *args, **kwargs):
+        return np.asarray(self.array).copy(*args, **kwargs)
 
     def __setitem__(self, key, value):
         self._ensure_copied()
@@ -1500,3 +1524,9 @@ class PandasIndexAdapter(ExplicitlyIndexedNDArrayMixin):
         # 8000341
         array = self.array.copy(deep=True) if deep else self.array
         return PandasIndexAdapter(array, self._dtype)
+
+inject_passthrough_binary_ops(ImplicitToExplicitIndexingAdapter, inplace=True)
+inject_passthrough_binary_ops(LazilyVectorizedIndexedArray, inplace=True)
+inject_passthrough_binary_ops(LazilyOuterIndexedArray, inplace=True)
+inject_passthrough_binary_ops(CopyOnWriteArray, inplace=True)
+inject_passthrough_binary_ops(ExplicitlyIndexedNDArrayMixin, inplace=True)
