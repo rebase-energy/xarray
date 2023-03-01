@@ -5,7 +5,6 @@ from collections import defaultdict
 from contextlib import suppress
 from datetime import timedelta
 from typing import Any, Callable, Iterable, Sequence, Tuple, Union
-
 import numpy as np
 import pandas as pd
 
@@ -42,6 +41,8 @@ def expanded_indexer(key, ndim):
                 found_ellipsis = True
             else:
                 new_key.append(slice(None))
+        elif isinstance(k, list):
+            new_key.append(np.asarray(k))
         else:
             new_key.append(k)
     if len(new_key) > ndim:
@@ -325,6 +326,33 @@ def _index_indexer_1d(old_indexer, applied_indexer, size):
     return indexer
 
 
+def _get_by_coordinates_indexer(indexer, shape):
+    from zarr.indexing import slice_to_range, replace_lists
+
+    indexer = replace_lists(indexer)
+    points_indices_length = np.asarray([len(ix) for ix in indexer if isinstance(ix, np.ndarray)])
+    points_indices_positions = np.asarray([dim_ix for dim_ix, ix in enumerate(indexer) if isinstance(ix, np.ndarray)])
+
+    if len(points_indices_length) > 0:
+        if not all(points_indices_length[0] == points_indices_length):
+            raise ValueError("All explicit indices list have to have the same number of elements")
+        points_indices_length = points_indices_length[0]
+    else:
+        raise ValueError("CoordinatesIndexer must have at least one explicit index element")
+
+    indices = np.zeros((len(shape), points_indices_length), dtype=np.integer)
+    for pos in points_indices_positions:
+        indices[pos, :] = indexer[pos]
+
+    for dim_ix, dim_sel in enumerate(indexer):
+        if isinstance(dim_sel, slice):
+            slice_dim_expanded = np.asarray(slice_to_range(dim_sel, shape[dim_ix]))
+            slice_indices = np.tile(slice_dim_expanded, np.prod(indices.shape[1:]))
+            indices = np.repeat(np.expand_dims(indices, -1), len(slice_dim_expanded), axis=-1)
+            indices[dim_ix, ...] = slice_indices.reshape(indices.shape[1:])
+    return tuple(indices)
+
+
 class ExplicitIndexer:
     """Base class for explicit indexer objects.
 
@@ -412,7 +440,9 @@ class OuterIndexer(ExplicitIndexer):
                 k = int(k)
             elif isinstance(k, slice):
                 k = as_integer_slice(k)
-            elif isinstance(k, np.ndarray):
+            elif isinstance(k, np.ndarray) or isinstance(k, list):
+                if isinstance(k, list):
+                    k = np.asarray(k, dtype=np.integer)
                 if not np.issubdtype(k.dtype, np.integer):
                     raise TypeError(
                         f"invalid indexer array, does not have integer dtype: {k!r}"
@@ -476,6 +506,20 @@ class VectorizedIndexer(ExplicitIndexer):
         super().__init__(new_key)
 
 
+class CoordinatesIndexer(ExplicitIndexer):
+    """Tuple for coordinates-based indexing.
+    """
+
+    __slots__ = ()
+
+    def __init__(self, key, shape):
+        if not isinstance(key, tuple):
+            raise TypeError(f"key must be a tuple: {key!r}")
+
+        new_key = _get_by_coordinates_indexer(key, shape)
+        super().__init__(new_key)
+
+
 class ExplicitlyIndexed:
     """Mixin to mark support for Indexer subclasses in indexing."""
 
@@ -518,8 +562,14 @@ class ImplicitToExplicitIndexingAdapter(utils.NDArrayMixin):
     def copy(self, *args, **kwargs):
         return np.asarray(self.array).copy(*args, **kwargs)
 
+    def transpose(self, *args, **kwargs):
+        return np.asarray(self.array).transpose(*args, **kwargs)
+
     def __array__(self, dtype=None):
         return np.asarray(self.array, dtype=dtype)
+
+    def getitem_numpy_compat(self, key):
+        return self.array.getitem_numpy_compat(key)
 
     def __getitem__(self, key):
         key = expanded_indexer(key, self.ndim)
@@ -566,9 +616,13 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
         return np.asarray(self.array).copy(*args, **kwargs)
 
     def _updated_key(self, new_key):
-        iter_new_key = iter(expanded_indexer(new_key.tuple, self.ndim))
+        if not isinstance(new_key, tuple):
+            new_key = new_key.tuple
+        iter_new_key = iter(expanded_indexer(new_key, self.ndim))
         full_key = []
         for size, k in zip(self.array.shape, self.key.tuple):
+            if isinstance(k, list):
+                k = np.asarray(k)
             if isinstance(k, integer_types):
                 full_key.append(k)
             else:
@@ -578,6 +632,10 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
         if all(isinstance(k, integer_types + (slice,)) for k in full_key):
             return BasicIndexer(full_key)
         return OuterIndexer(full_key)
+
+    def getitem_numpy_compat(self, indexer):
+        coords_indexer = CoordinatesIndexer(self._updated_key(indexer).tuple, self.shape)
+        return self.array[coords_indexer]
 
     @property
     def shape(self):
@@ -700,6 +758,9 @@ class CopyOnWriteArray(ExplicitlyIndexedNDArrayMixin):
 
     def transpose(self, order):
         return self.array.transpose(order)
+
+    def getitem_numpy_compat(self, key):
+        return self.array.getitem_numpy_compat(key)
 
     @property
     def chunks(self):

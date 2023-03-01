@@ -66,6 +66,8 @@ class ZarrArrayWrapper(BackendArray):
             return array.vindex[
                 indexing._arrayize_vectorized_indexer(key, self.shape).tuple
             ]
+        elif isinstance(key, indexing.CoordinatesIndexer):
+            return array.vindex[key.tuple]
         else:
             assert isinstance(key, indexing.OuterIndexer)
             return array.oindex[key.tuple]
