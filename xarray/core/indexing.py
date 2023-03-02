@@ -16,7 +16,7 @@ from .pycompat import (
     is_duck_dask_array,
     sparse_array_type,
 )
-from .utils import is_dict_like, maybe_cast_to_coords_dtype, inject_passthrough_binary_ops, is_integer
+from .utils import is_dict_like, maybe_cast_to_coords_dtype, inject_passthrough_binary_ops_inplace, is_integer, patch_with_array_generic_methods_inplace
 
 
 def expanded_indexer(key, ndim):
@@ -350,6 +350,15 @@ def _get_by_coordinates_indexer(indexer, shape):
             slice_indices = np.tile(slice_dim_expanded, np.prod(indices.shape[1:]))
             indices = np.repeat(np.expand_dims(indices, -1), len(slice_dim_expanded), axis=-1)
             indices[dim_ix, ...] = slice_indices.reshape(indices.shape[1:])
+    if all(np.diff(points_indices_positions) == 1):
+        points_dim = points_indices_positions[0] + 1
+    else:
+        points_dim = 1
+    if points_dim != 1:
+        axes = list(range(len(indices.shape)))
+        axes.insert(points_dim+1, 1)
+        axes.pop(1)
+        indices = indices.transpose(axes)
     return tuple(indices)
 
 
@@ -1586,8 +1595,26 @@ class PandasIndexAdapter(ExplicitlyIndexedNDArrayMixin):
         array = self.array.copy(deep=True) if deep else self.array
         return PandasIndexAdapter(array, self._dtype)
 
-inject_passthrough_binary_ops(ImplicitToExplicitIndexingAdapter, inplace=True)
-inject_passthrough_binary_ops(LazilyVectorizedIndexedArray, inplace=True)
-inject_passthrough_binary_ops(LazilyOuterIndexedArray, inplace=True)
-inject_passthrough_binary_ops(CopyOnWriteArray, inplace=True)
-inject_passthrough_binary_ops(ExplicitlyIndexedNDArrayMixin, inplace=True)
+inject_passthrough_binary_ops_inplace(ImplicitToExplicitIndexingAdapter)
+inject_passthrough_binary_ops_inplace(LazilyVectorizedIndexedArray)
+inject_passthrough_binary_ops_inplace(LazilyOuterIndexedArray)
+inject_passthrough_binary_ops_inplace(CopyOnWriteArray)
+inject_passthrough_binary_ops_inplace(ExplicitlyIndexedNDArrayMixin)
+
+
+wrap_methods = ['T', 'all', 'any', 'argmax', 'argmin', 'argpartition', 'argsort',
+                'astype', 'base', 'byteswap', 'choose', 'clip', 'compress', 'conj',
+                'conjugate', 'copy', 'ctypes', 'cumprod', 'cumsum', 'data',
+                'diagonal', 'dot', 'dtype', 'dump', 'dumps', 'fill', 'flags', 'flat',
+                'flatten', 'getfield', 'imag', 'item', 'itemset', 'itemsize',
+                'max', 'mean', 'min', 'nbytes', 'ndim', 'newbyteorder', 'nonzero',
+                'partition', 'prod', 'ptp', 'put', 'ravel', 'real', 'repeat',
+                'reshape', 'resize', 'round', 'searchsorted', 'setfield',
+                'setflags', 'shape', 'size', 'sort', 'squeeze', 'std', 'strides',
+                'sum', 'swapaxes', 'take', 'tobytes', 'tofile', 'tolist', 'tostring',
+                'trace', 'transpose', 'var', 'view']
+patch_with_array_generic_methods_inplace(ImplicitToExplicitIndexingAdapter, wrap_methods)
+patch_with_array_generic_methods_inplace(LazilyVectorizedIndexedArray, wrap_methods)
+patch_with_array_generic_methods_inplace(LazilyOuterIndexedArray, wrap_methods)
+patch_with_array_generic_methods_inplace(CopyOnWriteArray, wrap_methods)
+patch_with_array_generic_methods_inplace(ExplicitlyIndexedNDArrayMixin, wrap_methods)

@@ -581,7 +581,21 @@ def _array_passthrough_bin_op(f):
         return f(self_arr, other_arr)
     return func
 
-def inject_passthrough_binary_ops(cls, inplace=False):
+def patch_with_array_generic_methods_inplace(cls, methods):
+    def forward_call(m):
+        def func(self, *args, **kwargs):
+            if not hasattr(self, "__array__"):
+                raise NotImplementedError()
+            self_arr = self.__array__()
+            return getattr(self_arr, m)(*args, **kwargs)
+        return func
+
+    for m in methods:
+        if hasattr(cls, m):
+            continue
+        setattr(cls, m, forward_call(m))
+
+def inject_passthrough_binary_ops_inplace(cls):
     from .ops import CMP_BINARY_OPS, NUM_BINARY_OPS, op_str, get_op
     for name in CMP_BINARY_OPS + NUM_BINARY_OPS:
         setattr(cls, op_str(name), _array_passthrough_bin_op(get_op(name)))
