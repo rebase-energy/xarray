@@ -642,8 +642,14 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
         return OuterIndexer(full_key)
 
     def getitem_numpy_compat(self, indexer):
-        coords_indexer = CoordinatesIndexer(self._updated_key(indexer).tuple, self.shape)
-        return self.array[coords_indexer]
+        from xarray.backends.common import BackendArray
+        if issubclass(type(self.array), BackendArray):
+            coords_indexer = CoordinatesIndexer(self._updated_key(indexer).tuple, self.shape)
+            return self.array[coords_indexer]
+        elif hasattr(self.array, "getitem_numpy_compat"):
+            return self.array.getitem_numpy_compat(indexer)
+        else:
+            return self.__array__()[indexer]
 
     @property
     def shape(self):
