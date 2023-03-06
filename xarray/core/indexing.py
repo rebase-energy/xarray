@@ -325,9 +325,8 @@ def _index_indexer_1d(old_indexer, applied_indexer, size):
         indexer = old_indexer[applied_indexer]
     return indexer
 
-
 def _get_by_coordinates_indexer(indexer, shape):
-    from zarr.indexing import slice_to_range, replace_lists
+    from zarr.indexing import replace_lists
 
     indexer = replace_lists(indexer)
     points_indices_length = np.asarray([len(ix) for ix in indexer if isinstance(ix, np.ndarray)])
@@ -346,7 +345,7 @@ def _get_by_coordinates_indexer(indexer, shape):
 
     for dim_ix, dim_sel in enumerate(indexer):
         if isinstance(dim_sel, slice):
-            slice_dim_expanded = np.asarray(slice_to_range(dim_sel, shape[dim_ix]))
+            slice_dim_expanded = np.asarray(range(dim_sel.start, dim_sel.stop, dim_sel.step))[:shape[dim_ix]]
             slice_indices = np.tile(slice_dim_expanded, np.prod(indices.shape[1:]))
             indices = np.repeat(np.expand_dims(indices, -1), len(slice_dim_expanded), axis=-1)
             indices[dim_ix, ...] = slice_indices.reshape(indices.shape[1:])
