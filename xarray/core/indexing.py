@@ -641,10 +641,35 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
             return BasicIndexer(full_key)
         return OuterIndexer(full_key)
 
+    def _updated_key_coords(self, new_key):
+        if not isinstance(new_key, tuple):
+            new_key = new_key.tuple
+        key_transf = []
+        for k, dim_len in zip(self.key.tuple, self.shape):
+            if isinstance(k, np.ndarray) and len(k) == 1 and dim_len == 1:
+                key_transf.append(slice(k[0], k[0]+1, 1))
+            else:
+                key_transf.append(k)
+        key_transf = tuple(key_transf)
+        iter_new_key = iter(expanded_indexer(new_key, self.ndim))
+        full_key = []
+        for size, k in zip(self.array.shape, key_transf):
+            if isinstance(k, list):
+                k = np.asarray(k)
+            if isinstance(k, integer_types):
+                k = np.asarray(k)
+            full_key.append(_index_indexer_1d(k, next(iter_new_key), size))
+        full_key = tuple(full_key)
+
+        if all(isinstance(k, integer_types + (slice,)) for k in full_key):
+            return BasicIndexer(full_key)
+        return OuterIndexer(full_key)
+
     def getitem_numpy_compat(self, indexer):
         from xarray.backends.common import BackendArray
         if issubclass(type(self.array), BackendArray):
-            coords_indexer = CoordinatesIndexer(self._updated_key(indexer).tuple, self.shape)
+            new_key = self._updated_key_coords(indexer).tuple
+            coords_indexer = CoordinatesIndexer(new_key, self.shape)
             return self.array[coords_indexer]
         elif hasattr(self.array, "getitem_numpy_compat"):
             return self.array.getitem_numpy_compat(indexer)
