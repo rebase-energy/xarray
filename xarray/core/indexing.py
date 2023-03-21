@@ -645,11 +645,15 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
         if not isinstance(new_key, tuple):
             new_key = new_key.tuple
         key_transf = []
-        for k, dim_len in zip(self.key.tuple, self.array.shape):
-            if isinstance(k, np.ndarray) and len(k) == 1 and dim_len == 1:
+        dim_self_ix = 0
+        for k in self.key.tuple:
+            if isinstance(k, np.ndarray) and len(k) == 1 and self.shape[dim_self_ix] == 1:
                 key_transf.append(slice(k[0], k[0]+1, 1))
             else:
                 key_transf.append(k)
+            if not isinstance(k, integer_types):
+                dim_self_ix += 1
+
         key_transf = tuple(key_transf)
         iter_new_key = iter(expanded_indexer(new_key, len(self.shape)))
         full_key = []
