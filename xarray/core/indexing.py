@@ -331,33 +331,40 @@ def _get_by_coordinates_indexer(indexer, shape):
     indexer = replace_lists(indexer)
     points_indices_length = np.asarray([len(ix) for ix in indexer if isinstance(ix, np.ndarray)])
     points_indices_positions = np.asarray([dim_ix for dim_ix, ix in enumerate(indexer) if isinstance(ix, np.ndarray)])
+    array_indexers = list(zip(points_indices_positions, points_indices_length))
+    # single_point_len = [p_pos for p_pos, p_len in array_indexers if p_len == 1]
+    # multiple_point_len = [p_pos for p_pos, p_len in array_indexers if p_len > 1]
 
-    if len(points_indices_length) > 0:
-        if not all(points_indices_length[0] == points_indices_length):
-            raise ValueError("All explicit indices list have to have the same number of elements")
-        points_indices_length = points_indices_length[0]
-    else:
+    if len(points_indices_length) == 0:
         raise ValueError("CoordinatesIndexer must have at least one explicit index element")
 
-    indices = np.zeros((len(shape), points_indices_length), dtype=np.integer)
+    if len(np.unique([p_len for _, p_len in array_indexers if p_len > 1])) > 1:
+        raise ValueError("Multi-point coordinates must all have the same length")
+
+    n_points = max(points_indices_length)
+    indices = np.zeros((len(shape), n_points), dtype=np.integer)
     for pos in points_indices_positions:
         indices[pos, :] = indexer[pos]
 
     for dim_ix, dim_sel in enumerate(indexer):
         if isinstance(dim_sel, slice):
-            slice_dim_expanded = np.asarray(range(dim_sel.start, dim_sel.stop, dim_sel.step))[:shape[dim_ix]]
-            slice_indices = np.tile(slice_dim_expanded, np.prod(indices.shape[1:]))
-            indices = np.repeat(np.expand_dims(indices, -1), len(slice_dim_expanded), axis=-1)
-            indices[dim_ix, ...] = slice_indices.reshape(indices.shape[1:])
-    if all(np.diff(points_indices_positions) == 1):
-        points_dim = points_indices_positions[0] + 1
-    else:
+            dim_expanded = np.asarray(range(dim_sel.start, dim_sel.stop, dim_sel.step))[:shape[dim_ix]]
+            dim_indices = np.tile(dim_expanded, np.prod(indices.shape[1:]))
+            indices = np.repeat(np.expand_dims(indices, -1), len(dim_expanded), axis=-1)
+            indices[dim_ix, ...] = dim_indices.reshape(indices.shape[1:])
+
+    mixed_positions = not all (np.diff(points_indices_positions) == 1)
+    if mixed_positions:
         points_dim = 1
+    else:
+        points_dim = points_indices_positions[0] + 1
+
     if points_dim != 1:
         axes = list(range(len(indices.shape)))
         axes.insert(points_dim+1, 1)
         axes.pop(1)
         indices = indices.transpose(axes)
+
     return tuple(indices)
 
 
@@ -675,12 +682,14 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
         if issubclass(type(self.array), BackendArray):
             new_key = self._updated_key_coords(indexer).tuple
             coords_indexer = CoordinatesIndexer(new_key, self.array.shape)
-            return self.array[coords_indexer]
+            result = self.array[coords_indexer]
+            expected_shape = np.zeros(self.shape, dtype=np.bool)[indexer].shape
+            result = result.reshape(expected_shape)
+            return result
         elif hasattr(self.array, "getitem_numpy_compat"):
             return self.array.getitem_numpy_compat(indexer)
         else:
             return self.__array__()[indexer]
-
     @property
     def shape(self):
         shape = []
