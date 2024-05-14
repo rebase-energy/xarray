@@ -683,7 +683,7 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
             new_key = self._updated_key_coords(indexer).tuple
             coords_indexer = CoordinatesIndexer(new_key, self.array.shape)
             result = self.array[coords_indexer]
-            expected_shape = np.zeros(self.shape, dtype=np.bool)[indexer].shape
+            expected_shape = np.zeros(self.shape, dtype=np.bool_)[indexer].shape
             result = result.reshape(expected_shape)
             return result
         elif hasattr(self.array, "getitem_numpy_compat"):
