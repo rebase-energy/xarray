@@ -596,6 +596,9 @@ class ImplicitToExplicitIndexingAdapter(utils.NDArrayMixin):
             # scalars.
             return result
 
+    def __dask_tokenize__(self):
+        return str(self)
+
 
 class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
     """Wrap an array to make basic and outer indexing lazy."""
@@ -725,6 +728,9 @@ class LazilyOuterIndexedArray(ExplicitlyIndexedNDArrayMixin):
     def __repr__(self):
         return f"{type(self).__name__}(array={self.array!r}, key={self.key!r})"
 
+    def __dask_tokenize__(self):
+        return str(self)
+
 
 class LazilyVectorizedIndexedArray(ExplicitlyIndexedNDArrayMixin):
     """Wrap an array to make vectorized indexing lazy."""
@@ -782,6 +788,9 @@ class LazilyVectorizedIndexedArray(ExplicitlyIndexedNDArrayMixin):
     def __repr__(self):
         return f"{type(self).__name__}(array={self.array!r}, key={self.key!r})"
 
+    def __dask_tokenize__(self):
+        return str(self)
+
 
 def _wrap_numpy_scalars(array):
     """Wrap NumPy scalars in 0d arrays."""
@@ -832,6 +841,10 @@ class CopyOnWriteArray(ExplicitlyIndexedNDArrayMixin):
         # implementation.
         return type(self)(self.array)
 
+    def __dask_tokenize__(self):
+        return str(self)
+
+
 
 class MemoryCachedArray(ExplicitlyIndexedNDArrayMixin):
     __slots__ = ("array",)
@@ -855,6 +868,9 @@ class MemoryCachedArray(ExplicitlyIndexedNDArrayMixin):
 
     def __setitem__(self, key, value):
         self.array[key] = value
+
+    def __dask_tokenize__(self):
+        return str(self)
 
 
 def as_indexable(array):
