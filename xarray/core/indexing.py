@@ -189,7 +189,14 @@ def convert_label_indexer(index, label, index_name="", method=None, tolerance=No
                     )
                 indexer = index.get_loc(label_value)
             else:
-                indexer = index.get_loc(label_value, method=method, tolerance=tolerance)
+                if method is not None or tolerance is not None:
+                    indexer = index.get_indexer(
+                        [label_value], method=method, tolerance=tolerance
+                    )[0]
+                    if indexer == -1:
+                        raise KeyError(label_value)
+                else:
+                    indexer = index.get_loc(label_value)
         elif label.dtype.kind == "b":
             indexer = label
         else:

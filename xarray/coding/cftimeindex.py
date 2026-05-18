@@ -400,7 +400,7 @@ class CFTimeIndex(pd.Index):
 
         times = self._data
 
-        if self.is_monotonic:
+        if self.is_monotonic_increasing:
             if len(times) and (
                 (start < times[0] and end < times[0])
                 or (start > times[-1] and end > times[-1])
@@ -456,8 +456,12 @@ class CFTimeIndex(pd.Index):
         """Adapted from pandas.tseries.index.DatetimeIndex.get_loc"""
         if isinstance(key, str):
             return self._get_string_slice(key)
+        elif method is not None or tolerance is not None:
+            return pd.Index.get_indexer(
+                self, [key], method=method, tolerance=tolerance
+            )[0]
         else:
-            return pd.Index.get_loc(self, key, method=method, tolerance=tolerance)
+            return pd.Index.get_loc(self, key)
 
     def _maybe_cast_slice_bound(self, label, side, kind):
         """Adapted from
