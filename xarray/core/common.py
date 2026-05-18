@@ -1133,9 +1133,14 @@ class DataWithCoords(SupportsArithmetic, AttrAccessMixin):
 
                 grouper = CFTimeGrouper(freq, closed, label, base, loffset)
             else:
-                grouper = pd.Grouper(
-                    freq=freq, closed=closed, label=label, base=base, loffset=loffset
-                )
+                # pandas >= 2.0 removed `base` and `loffset` from pd.Grouper;
+                # only forward them when explicitly set so the default path keeps working.
+                grouper_kwargs = {"freq": freq, "closed": closed, "label": label}
+                if base != 0:
+                    grouper_kwargs["base"] = base
+                if loffset is not None:
+                    grouper_kwargs["loffset"] = loffset
+                grouper = pd.Grouper(**grouper_kwargs)
         group = DataArray(
             dim_coord, coords=dim_coord.coords, dims=dim_coord.dims, name=RESAMPLE_DIM
         )
