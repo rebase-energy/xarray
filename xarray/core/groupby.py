@@ -221,16 +221,22 @@ def _apply_loffset(grouper, result):
         the result of resample
     """
 
+    # pandas >= 2.0 removed `loffset` from TimeGrouper entirely; skip cleanly in that case.
+    loffset = getattr(grouper, "loffset", None)
     needs_offset = (
-        isinstance(grouper.loffset, (pd.DateOffset, datetime.timedelta))
+        isinstance(loffset, (pd.DateOffset, datetime.timedelta))
         and isinstance(result.index, pd.DatetimeIndex)
         and len(result.index) > 0
     )
 
     if needs_offset:
-        result.index = result.index + grouper.loffset
+        result.index = result.index + loffset
 
-    grouper.loffset = None
+    if hasattr(grouper, "loffset"):
+        try:
+            grouper.loffset = None
+        except AttributeError:
+            pass
 
 
 class GroupBy(SupportsArithmetic):
